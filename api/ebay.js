@@ -1,44 +1,68 @@
+// eBay RSS Feed v3 — handles all eBay RSS link formats
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
   const { q = 'sneakers' } = req.query;
   try {
-    // eBay RSS gives real /itm/ URLs — no auth needed
-    const url = `https://www.ebay.fr/sch/i.html?_nkw=${encodeURIComponent(q)}&_sop=10&_ipg=25&_rss=1`;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedFetcher-Google; +http://www.google.com/feedfetcher.html)' }
+    // _sop=15 = lowest price first, guaranteed real current listings
+    const rssUrl = `https://www.ebay.fr/sch/i.html?_nkw=${encodeURIComponent(q)}&_sop=15&_ipg=25&_rss=1`;
+    const r = await fetch(rssUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/xml, application/xml, application/rss+xml, */*',
+      }
     });
-    const xml = await resp.text();
+    const xml = await r.text();
     const items = [];
-    // RSS 2.0: each <item> block
-    const blocks = xml.split(/<item[\s>]/i).slice(1);
-    for (const b of blocks) {
-      // title
-      const t = (b.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)||[])[1];
-      if (!t || /shop on ebay/i.test(t)) continue;
-      const name = t.replace(/<[^>]+>/g,'').trim();
 
-      // link — two formats in eBay RSS
-      let itemUrl = '';
-      const l1 = b.match(/<link>(https?:\/\/www\.ebay\.[^<]+)<\/link>/i);
-      const l2 = b.match(/<guid[^>]*>(https?:\/\/www\.ebay\.[^<]+)<\/guid>/i);
-      const l3 = b.match(/href="(https:\/\/www\.ebay\.fr\/itm\/[^"]+)"/i);
-      if (l1) itemUrl = l1[1]; else if (l2) itemUrl = l2[1]; else if (l3) itemUrl = l3[1];
-      if (!itemUrl || !itemUrl.includes('/itm/')) continue;
-      // strip tracking params, keep clean URL
-      itemUrl = itemUrl.split('?')[0].split('&')[0];
+    // Split on <item> tags
+    const parts = xml.split(/<item>/i);
+    for (let i = 1; i < parts.length && items.length < 15; i++) {
+      const block = parts[i];
+      // --- Title ---
+      const titleM = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+      if (!titleM) continue;
+      const name = titleM[1].replace(/<[^>]+>/g,'').trim();
+      if (!name || /shop on ebay/i.test(name)) continue;
 
-      // price
-      const pm = b.match(/(\d[\d\s]*[,.]?\d*)\s*EUR/i) || b.match(/EUR\s*([\d,. ]+)/i);
+      // --- URL: try multiple formats ---
+      let url = '';
+      // Format 1: <link>URL</link>
+      const m1 = block.match(/<link[^>]*>\s*(https?:\/\/www\.ebay[^<\s]+)\s*<\/link>/i);
+      // Format 2: <link/> then URL as text (atom style)
+      const m2 = block.match(/<link[^>]*\/>\s*\n?\s*(https?:\/\/www\.ebay[^<\s]+)/i);
+      // Format 3: <guid>
+      const m3 = block.match(/<guid[^>]*>\s*(https?:\/\/www\.ebay[^<\s]+)\s*<\/guid>/i);
+      // Format 4: href attribute
+      const m4 = block.match(/href="(https?:\/\/www\.ebay\.fr\/itm\/[^"]+)"/i);
+
+      if (m1) url = m1[1]; else if (m2) url = m2[1];
+      else if (m3) url = m3[1]; else if (m4) url = m4[1];
+
+      if (!url) continue;
+      // Must be a direct item page
+      if (!url.includes('/itm/') && !url.includes('/i.html')) {
+        // try to find any itm link in block
+        const itm = block.match(/(https?:\/\/www\.ebay\.fr\/itm\/\d+)/i);
+        if (itm) url = itm[1]; else continue;
+      }
+      // Clean URL — remove tracking params
+      url = url.split('?')[0].split('&')[0];
+      if (!url.includes('/itm/') ) continue;
+
+      // --- Price ---
+      const pm = block.match(/(\d[\d\s]*[.,]\d{2})\s*EUR/i)
+               || block.match(/EUR\s*([\d.,]+)/i)
+               || block.match(/<g:price[^>]*>([\d.,]+)/i);
       const price = pm ? parseFloat(pm[1].replace(/\s/g,'').replace(',','.')) : 0;
 
-      // condition
-      const cm = (b.match(/Occasion|Neuf|Used|New/i)||[])[0]||'Occasion';
+      // --- Condition ---
+      const cm = block.match(/(Neuf|Occasion|Used|New|Très bon)/i);
 
-      items.push({ name, price, url: itemUrl, plat: 'eBay', cond: cm, seller: '' });
+      items.push({ name, price, url, plat:'eBay', cond: cm?cm[1]:'Occasion', seller:'' });
     }
     res.status(200).json({ items, total: items.length });
   } catch(e) {
-    res.status(500).json({ items: [], error: e.message });
+    res.status(500).json({ items:[], error: e.message });
   }
 }
