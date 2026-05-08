@@ -1916,121 +1916,133 @@ function generateMockDeals(activeCatIds){
 
 
 async function snipeNow(){
-  if(!S.botOn){ alert('Activez le bot d\'abord.'); return; }
+  if(!S.botOn){ alert('Activez le bot.'); return; }
   if(S.activeCats.size === 0){ alert('Sélectionnez au moins une catégorie.'); return; }
   if(S.botScanning) return;
 
   S.botScanning = true; S.liveDeals = []; S.botScanError = '';
   if(S.page==='bot'){ document.querySelector('.apmain').innerHTML = renderBot(); }
 
-  // Platform endpoints for each category
-  const CAT_PLATFORM = {
-    0:['vinted','ebay'],    1:['vinted','ebay'],   2:['vinted','ebay'],
-    3:['vinted','ebay'],    4:['vinted'],           5:['ebay','vinted'],
-    6:['vestiaire','ebay'], 7:['vinted','ebay'],    8:['ebay','vinted'],
-    9:['ebay','vinted'],    10:['vinted'],           11:['vestiaire'],
-    12:['vestiaire'],        13:['vestiaire'],        14:['vestiaire'],
-    15:['vestiaire'],        16:['vestiaire'],        17:['vestiaire'],
-    18:['vestiaire'],        19:['vestiaire'],        20:['vestiaire'],
-    21:['vestiaire'],        22:['vestiaire'],
-    23:['leboncoin','ebay'],24:['leboncoin','vinted'],25:['leboncoin','vinted'],
-    26:['leboncoin','ebay'],27:['leboncoin','ebay'],28:['ebay','leboncoin'],
-    29:['vinted','ebay'],   30:['ebay'],             31:['vestiaire','ebay'],
-    32:['vestiaire','ebay'],33:['vestiaire'],         34:['vestiaire'],
-    35:['vinted','ebay'],   36:['ebay'],             37:['ebay'],
-    38:['leboncoin','ebay'],39:['ebay','vinted'],
-    40:['vestiaire','ebay'],41:['ebay'],             42:['ebay','leboncoin'],
-    43:['ebay','leboncoin'],44:['ebay'],
-    45:['vinted','ebay'],   46:['leboncoin'],        47:['vinted','ebay'],
-    48:['leboncoin','ebay'],49:['ebay','vinted'],    50:['vinted','leboncoin'],
-  };
+  const activeCatIds = [...S.activeCats].slice(0, 6);
+  const catNames = activeCatIds.map(id => CAT_QUERIES[id]?.name).filter(Boolean);
 
-  const VINTED_QUERIES = {
-    0:['air jordan','jordan retro'], 1:['yeezy','adidas yeezy'], 2:['new balance 990'],
-    3:['asics gel','saucony'], 4:['salomon xt'], 5:['nike collab'], 6:['balenciaga sneakers'],
-    7:['stussy hoodie'], 8:['supreme box logo'], 9:['palace hoodie'], 10:['corteiz'],
-    11:['off white'], 12:['stone island'], 13:['arcteryx'], 14:['carhartt wip'],
-    15:['louis vuitton sac'], 16:['hermes'], 17:['chanel sac'], 18:['dior sac'],
-    19:['gucci sac'], 20:['prada sac'], 21:['bottega veneta'], 22:['celine sac'],
-    23:['iphone'], 24:['ps5'], 25:['nintendo switch'], 26:['rtx gpu'], 27:['dji drone'],
-    28:['sennheiser casque'], 29:['casio g-shock'], 30:['seiko'], 31:['omega montre'],
-    32:['rolex'], 33:['patek philippe'], 34:['audemars piguet'],
-    35:['carte pokemon'], 36:['pokemon psa'], 37:['carte nba'],
-    38:['super nintendo jeu'], 39:['kaws figurine'], 40:['grand cru vin'],
-    41:['macallan whisky'], 42:['manga rare'], 43:['livre edition limitee'],
-    44:['banksy print'], 45:['maillot retro'], 46:['velo carbone'],
-    47:['patagonia veste'], 48:['fauteuil vintage'], 49:['parfum rare'], 50:['bague or'],
-  };
+  S.botScanMsg = 'Recherche des meilleures annonces en direct...';
+  if(S.page==='bot'){ document.querySelector('.apmain').innerHTML = renderBot(); }
 
-  const allDeals = [];
-  const activeCatIds = [...S.activeCats].slice(0, 8);
-  const total = activeCatIds.length;
-  let scanned = 0;
+  // Build a targeted prompt asking Claude to find specific current listings
+  const platformHints = catNames.map(cat => {
+    if(['Louis Vuitton','Hermès','Chanel','Dior','Gucci','Prada Miu Miu','Bottega Veneta','Céline','Omega','Rolex','Patek Philippe','Audemars Piguet'].includes(cat))
+      return cat + ' sur Vestiaire Collective ou eBay';
+    if(['Apple','PlayStation Xbox','Nintendo','PC Gaming GPU','Drones Cameras','Audio Hi-Fi'].includes(cat))
+      return cat + ' sur Leboncoin ou eBay France';
+    return cat + ' sur Vinted France ou eBay France';
+  }).join(', ');
 
-  async function fetchPlatform(platform, query, catId){
+  const prompt = `Tu es un bot sniper d'annonces pour revendeurs. Cherche sur le web des annonces ACTUELLEMENT EN LIGNE pour ces articles: ${catNames.join(', ')}.
+
+Plateformes à privilégier: ${platformHints}.
+
+RÈGLES ABSOLUES:
+- Trouve uniquement des annonces ACTIVES en ce moment (pas d'articles vendus)
+- Chaque URL doit pointer vers UNE annonce spécifique (ex: vinted.fr/items/12345, ebay.fr/itm/12345, leboncoin.fr/ad/12345)
+- PAS de pages de recherche, PAS de pages catégories
+- Prix réels observés sur l'annonce
+- Trie par meilleur rapport qualité/prix
+
+Réponds UNIQUEMENT avec un tableau JSON (sans texte avant/après, sans markdown):
+[
+  {"name":"Titre exact de l'annonce","price":85,"url":"https://url-directe-annonce.com/items/ID","plat":"Vinted","cond":"Très bon état","seller":"username","cat":"Nom catégorie"},
+  ...
+]
+Trouve 6 à 10 annonces.`;
+
+  try {
+    // Try server proxy first (Vercel production)
+    let data;
     try {
-      const catName = CAT_QUERIES[catId]?.name || 'Mode';
-      let endpoint = '';
-      if(platform === 'vinted')     endpoint = `/api/vinted?q=${encodeURIComponent(query)}&per_page=10`;
-      else if(platform === 'ebay')  endpoint = `/api/ebay?q=${encodeURIComponent(query+' france')}`;
-      else if(platform === 'leboncoin') endpoint = `/api/leboncoin?q=${encodeURIComponent(query)}`;
-      else if(platform === 'vestiaire') endpoint = `/api/vestiaire?q=${encodeURIComponent(query)}`;
-      else return [];
+      const proxyResp = await fetch('/api/snipe', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          tools: [{"type":"web_search_20250305","name":"web_search"}],
+          messages: [{role:'user', content: prompt}]
+        })
+      });
+      const ct = proxyResp.headers.get('content-type')||'';
+      if(!ct.includes('json')) throw new Error('proxy_unavailable');
+      data = await proxyResp.json();
+    } catch(proxyErr) {
+      if(!S.apiKey) throw new Error('no_key');
+      const directResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01'},
+        body: JSON.stringify({
+          model:'claude-sonnet-4-20250514',
+          max_tokens:2000,
+          tools:[{"type":"web_search_20250305","name":"web_search"}],
+          messages:[{role:'user',content:prompt}]
+        })
+      });
+      data = await directResp.json();
+    }
 
-      const resp = await fetch(endpoint);
-      const ct = resp.headers.get('content-type') || '';
-      if(!ct.includes('json')) return [];
-      const data = await resp.json();
-      const items = data.items || [];
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
 
-      return items.slice(0, 3).map(function(item){
-        if(!item.price || item.price < 5) return null;
-        const {estimatedSell, roi} = scoreROI(item.price, catName);
-        const score = Math.min(9.9, Math.max(5.5,
-          (roi>100?9.2:roi>60?8.2:roi>30?7.2:6.2) + (Math.random()*.5-.25)
-        )).toFixed(1);
+    // Extract text (skip tool_use blocks)
+    let rawText = '';
+    (data.content||[]).forEach(b => { if(b.type==='text') rawText += b.text; });
+
+    // Clean citations like [1], [Vinted.fr], etc.
+    rawText = rawText
+      .replace(/\[\d+\]/g,'')
+      .replace(/\[[A-Za-z][^\]]{0,60}\]/g,'')
+      .replace(/```json|```/gi,'')
+      .trim();
+
+    // Extract JSON array
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if(!jsonMatch) throw new Error('no_json');
+    const deals = JSON.parse(jsonMatch[0]);
+
+    // Filter: keep only specific listing URLs (not search pages)
+    const validDeals = deals.filter(d => {
+      if(!d.url || !d.name || !d.price) return false;
+      // Reject search/catalog pages
+      const bad = ['/catalog','/sch/i.html','recherche?','search?','/search/','/c/','/l/'];
+      return !bad.some(b => d.url.includes(b));
+    });
+
+    S.liveDeals = (validDeals.length > 0 ? validDeals : deals)
+      .filter(d => d.url && d.price)
+      .map(d => {
+        const {estimatedSell,roi} = scoreROI(parseFloat(d.price)||0, d.cat||catNames[0]);
+        const score = Math.min(9.9,Math.max(5.5,(roi>100?9.2:roi>60?8.2:roi>30?7.2:6.2)+(Math.random()*.5-.25))).toFixed(1);
         return {
-          name:   item.name,
-          cat:    catName,
-          plat:   item.plat || platform.charAt(0).toUpperCase()+platform.slice(1),
-          price:  item.price,
-          buy:    item.price,
+          name:   d.name,
+          cat:    d.cat||catNames[0],
+          plat:   d.plat||'Web',
+          price:  parseFloat(d.price)||0,
+          buy:    parseFloat(d.price)||0,
           sell:   estimatedSell,
-          roi:    roi,
+          roi,
           score:  parseFloat(score),
-          url:    item.url,
-          cond:   item.cond || '',
-          seller: item.seller || '',
+          url:    d.url,
+          cond:   d.cond||'',
+          seller: d.seller||'',
         };
-      }).filter(Boolean);
-    } catch(e){ return []; }
-  }
+      })
+      .sort((a,b) => b.roi-a.roi)
+      .slice(0,12);
 
-  for(const catId of activeCatIds){
-    scanned++;
-    const queries = VINTED_QUERIES[catId] || ['mode'];
-    const query = queries[0];
-    const platforms = CAT_PLATFORM[catId] || ['vinted'];
-
-    S.botScanMsg = `Scan ${scanned}/${total} — ${CAT_QUERIES[catId]?.name||''}...`;
-    if(S.page==='bot'){ document.querySelector('.apmain').innerHTML = renderBot(); }
-
-    // Call 2 platforms in parallel
-    const results = await Promise.all(
-      platforms.slice(0,2).map(p => fetchPlatform(p, query, catId))
-    );
-    results.forEach(r => allDeals.push(...r));
-    await new Promise(r => setTimeout(r, 200));
-  }
-
-  // Deduplicate by URL, sort by ROI
-  S.liveDeals = allDeals
-    .filter((d,i,arr) => d.url && arr.findIndex(x=>x.url===d.url)===i)
-    .sort((a,b) => b.roi - a.roi)
-    .slice(0, 15);
-
-  if(S.liveDeals.length < 4){
-    S.liveDeals = [...S.liveDeals, ...generateMockDeals(activeCatIds)].slice(0,10);
+  } catch(err) {
+    console.error('Snipe error:', err.message);
+    // Fallback to direct scraper endpoints
+    S.liveDeals = await scrapeDirectFallback(activeCatIds);
+    if(S.liveDeals.length === 0){
+      S.botScanError = 'Scan indisponible momentanément. Réessayez dans quelques instants.';
+    }
   }
 
   S.botScanning = false;
@@ -2041,6 +2053,60 @@ async function snipeNow(){
     attachDealClicks();
   }
 }
+
+// Direct scraper fallback: calls /api/vinted, /api/ebay, etc.
+async function scrapeDirectFallback(activeCatIds){
+  const CAT_PLATFORM = {
+    0:['vinted','ebay'],1:['vinted','ebay'],2:['vinted','ebay'],3:['vinted'],4:['vinted'],
+    5:['ebay'],6:['vestiaire'],7:['vinted','ebay'],8:['ebay'],9:['ebay','vinted'],
+    10:['vinted'],11:['vestiaire'],12:['vestiaire'],13:['vestiaire'],14:['vinted'],
+    15:['vestiaire'],16:['vestiaire'],17:['vestiaire'],18:['vestiaire'],19:['vestiaire'],
+    20:['vestiaire'],21:['vestiaire'],22:['vestiaire'],
+    23:['leboncoin','ebay'],24:['leboncoin'],25:['leboncoin','vinted'],
+    26:['leboncoin','ebay'],27:['leboncoin'],28:['ebay'],
+    29:['vinted','ebay'],30:['ebay'],31:['vestiaire'],32:['vestiaire'],33:['vestiaire'],34:['vestiaire'],
+    35:['vinted','ebay'],36:['ebay'],37:['ebay'],38:['leboncoin','ebay'],39:['ebay'],
+    40:['vestiaire'],41:['ebay'],42:['ebay'],43:['ebay'],44:['ebay'],
+    45:['vinted','ebay'],46:['leboncoin'],47:['vinted'],48:['leboncoin'],49:['ebay'],50:['vinted'],
+  };
+  const QUERIES = {
+    0:'air jordan retro',1:'yeezy 350',2:'new balance 990',3:'asics gel',4:'salomon xt-6',
+    5:'nike collab drop',6:'balenciaga sneakers',7:'stussy hoodie',8:'supreme box logo',
+    9:'palace hoodie',10:'corteiz crtz',11:'off white',12:'stone island',13:'arcteryx',
+    14:'carhartt wip',15:'louis vuitton sac',16:'hermes sac',17:'chanel sac',18:'dior sac',
+    19:'gucci sac',20:'prada sac',21:'bottega veneta',22:'celine sac',
+    23:'iphone',24:'ps5',25:'nintendo switch',26:'rtx gpu',27:'dji drone',28:'casque audio',
+    29:'casio g-shock',30:'seiko montre',31:'omega seamaster',32:'rolex',33:'patek philippe',34:'audemars piguet',
+    35:'carte pokemon',36:'pokemon psa 10',37:'carte nba prizm',38:'jeu super nintendo',39:'kaws figurine',
+    40:'grand cru vin',41:'macallan whisky',42:'manga rare',43:'livre edition limitee',44:'banksy print',
+    45:'maillot vintage',46:'velo carbone',47:'patagonia fleece',48:'fauteuil design vintage',
+    49:'creed aventus',50:'bague or',
+  };
+  const allDeals = [];
+  for(const catId of activeCatIds.slice(0,5)){
+    const platforms = CAT_PLATFORM[catId]||['vinted'];
+    const q = QUERIES[catId]||'occasion';
+    const catName = CAT_QUERIES[catId]?.name||'Mode';
+    for(const plat of platforms.slice(0,1)){
+      try {
+        const resp = await fetch(`/api/${plat}?q=${encodeURIComponent(q)}`);
+        const ct = resp.headers.get('content-type')||'';
+        if(!ct.includes('json')) continue;
+        const data = await resp.json();
+        (data.items||[]).slice(0,2).forEach(item => {
+          if(!item.price||!item.url) return;
+          const {estimatedSell,roi} = scoreROI(item.price, catName);
+          const score = Math.min(9.9,Math.max(5.5,(roi>100?9.2:roi>60?8.2:roi>30?7.2:6.2)+(Math.random()*.4-.2))).toFixed(1);
+          allDeals.push({name:item.name,cat:catName,plat:item.plat||plat,price:item.price,buy:item.price,
+            sell:estimatedSell,roi,score:parseFloat(score),url:item.url,cond:item.cond||'',seller:item.seller||''});
+        });
+      } catch(e){}
+      await new Promise(r=>setTimeout(r,150));
+    }
+  }
+  return allDeals.filter((d,i,a)=>d.url&&a.findIndex(x=>x.url===d.url)===i).sort((a,b)=>b.roi-a.roi).slice(0,10);
+}
+
 
 function attachDealClicks(){
   document.querySelectorAll('.bot-deal-card,.dash-deal-card').forEach(function(card){
