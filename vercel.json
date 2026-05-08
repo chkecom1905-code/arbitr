@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "api/snipe.js": { "maxDuration": 30 },
+    "api/listing.js": { "maxDuration": 15 }
+  }
+}
