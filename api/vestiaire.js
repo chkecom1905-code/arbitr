@@ -1,51 +1,53 @@
-// ARBITR — Vestiaire Collective Real-Time Scraper
-// Uses Vestiaire's catalog search API
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
-
-  const { q = 'sac', max_price = '' } = req.query;
-
+  const { q = 'sac' } = req.query;
   try {
-    const params = new URLSearchParams({
-      q,
-      limit: '20',
-      country: 'FR',
-      language: 'fr',
-      sortBy: 'CREATION_DATE',
-      sortOrder: 'DESC',
-    });
-    if (max_price) params.set('maxPrice', max_price);
-
-    const resp = await fetch(`https://search.vestiairecollective.com/v1/product/search?${params}`, {
+    // Vestiaire GraphQL search
+    const resp = await fetch('https://search.vestiairecollective.com/v1/product/search', {
+      method: 'GET',
       headers: {
-        'User-Agent': 'VestiaireMobile/9.1.1 (iPhone; iOS 17.0)',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
         'Accept': 'application/json',
         'Accept-Language': 'fr-FR',
-        'Referer': 'https://fr.vestiairecollective.com/',
-        'x-vc-locale': 'fr_FR',
-        'x-vc-country': 'FR',
-        'x-vc-currency': 'EUR',
-      },
+        'Referer': `https://fr.vestiairecollective.com/search/?q=${encodeURIComponent(q)}`,
+      }
     });
-
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    const data = await resp.json();
-    const items = (data.items || data.products || []).map(p => ({
-      name:   p.name || p.title || p.description,
-      price:  parseFloat(p.priceFormatted?.value || p.price?.cents / 100 || p.price || 0),
-      url:    p.link ? `https://fr.vestiairecollective.com${p.link}` : `https://fr.vestiairecollective.com/produit-${p.id}.shtml`,
-      plat:   'Vestiaire',
-      cond:   p.conditionLabel || p.condition || 'Très bon état',
-      seller: p.seller?.username || '',
-      active: true,
-    })).filter(i => i.name && i.price > 0);
-
-    return res.status(200).json({ items, total: items.length });
-  } catch (err) {
-    return res.status(500).json({ error: err.message, items: [] });
+    // Fallback: scrape search HTML
+    const searchUrl = `https://fr.vestiairecollective.com/search/?q=${encodeURIComponent(q)}&order=created_at_desc`;
+    const htmlResp = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'fr-FR,fr;q=0.9',
+      }
+    });
+    const html = await htmlResp.text();
+    const items = [];
+    // Extract product data from Next.js data
+    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.+?)<\/script>/s);
+    if (match) {
+      const data = JSON.parse(match[1]);
+      const products = data?.props?.pageProps?.searchResults?.items
+                    || data?.props?.pageProps?.products
+                    || data?.props?.pageProps?.initialData?.products
+                    || [];
+      for (const p of products.slice(0,12)) {
+        const price = parseFloat(p.price?.cents ? p.price.cents/100 : p.price?.amount || p.displayedPrice || 0);
+        if (!price || price < 10) continue;
+        const slug = p.slug || p.id;
+        items.push({
+          name:   p.name || p.description || p.brand_name,
+          price,
+          url:    p.link ? `https://fr.vestiairecollective.com${p.link}` : `https://fr.vestiairecollective.com/produit-${slug}.shtml`,
+          plat:   'Vestiaire',
+          cond:   p.condition_label || p.condition || 'Très bon état',
+          seller: p.seller?.username || '',
+        });
+      }
+    }
+    res.status(200).json({ items, total: items.length });
+  } catch(e) {
+    res.status(500).json({ items: [], error: e.message });
   }
 }
