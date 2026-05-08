@@ -1868,138 +1868,117 @@ async function snipeNow(){
   if(S.activeCats.size === 0){ alert('Sélectionnez au moins une catégorie.'); return; }
   if(S.botScanning) return;
 
-  S.noKeyError = false;
-  S.botScanning = true;
-  S.botScanMsg = 'Connexion aux plateformes...';
-  S.liveDeals = [];
+  S.botScanning = true; S.liveDeals = []; S.botScanError = '';
   if(S.page==='bot'){ document.querySelector('.apmain').innerHTML = renderBot(); }
 
-  const activeCatIds = [...S.activeCats];
-  const catNames = activeCatIds.map(id => CAT_QUERIES[id]?.name).filter(Boolean);
+  // Platform endpoints for each category
+  const CAT_PLATFORM = {
+    0:['vinted','ebay'],    1:['vinted','ebay'],   2:['vinted','ebay'],
+    3:['vinted','ebay'],    4:['vinted'],           5:['ebay','vinted'],
+    6:['vestiaire','ebay'], 7:['vinted','ebay'],    8:['ebay','vinted'],
+    9:['ebay','vinted'],    10:['vinted'],           11:['vestiaire'],
+    12:['vestiaire'],        13:['vestiaire'],        14:['vestiaire'],
+    15:['vestiaire'],        16:['vestiaire'],        17:['vestiaire'],
+    18:['vestiaire'],        19:['vestiaire'],        20:['vestiaire'],
+    21:['vestiaire'],        22:['vestiaire'],
+    23:['leboncoin','ebay'],24:['leboncoin','vinted'],25:['leboncoin','vinted'],
+    26:['leboncoin','ebay'],27:['leboncoin','ebay'],28:['ebay','leboncoin'],
+    29:['vinted','ebay'],   30:['ebay'],             31:['vestiaire','ebay'],
+    32:['vestiaire','ebay'],33:['vestiaire'],         34:['vestiaire'],
+    35:['vinted','ebay'],   36:['ebay'],             37:['ebay'],
+    38:['leboncoin','ebay'],39:['ebay','vinted'],
+    40:['vestiaire','ebay'],41:['ebay'],             42:['ebay','leboncoin'],
+    43:['ebay','leboncoin'],44:['ebay'],
+    45:['vinted','ebay'],   46:['leboncoin'],        47:['vinted','ebay'],
+    48:['leboncoin','ebay'],49:['ebay','vinted'],    50:['vinted','leboncoin'],
+  };
 
-  // Prompt engineered to return ONLY a raw JSON array — no markdown, no citations, no text around it
-  const prompt = `Tu es un assistant qui cherche des annonces de revente en France. Recherche sur Vinted, eBay France, Leboncoin, Vestiaire Collective des articles de ces catégories: ${catNames.join(', ')}.
+  const VINTED_QUERIES = {
+    0:['air jordan','jordan retro'], 1:['yeezy','adidas yeezy'], 2:['new balance 990'],
+    3:['asics gel','saucony'], 4:['salomon xt'], 5:['nike collab'], 6:['balenciaga sneakers'],
+    7:['stussy hoodie'], 8:['supreme box logo'], 9:['palace hoodie'], 10:['corteiz'],
+    11:['off white'], 12:['stone island'], 13:['arcteryx'], 14:['carhartt wip'],
+    15:['louis vuitton sac'], 16:['hermes'], 17:['chanel sac'], 18:['dior sac'],
+    19:['gucci sac'], 20:['prada sac'], 21:['bottega veneta'], 22:['celine sac'],
+    23:['iphone'], 24:['ps5'], 25:['nintendo switch'], 26:['rtx gpu'], 27:['dji drone'],
+    28:['sennheiser casque'], 29:['casio g-shock'], 30:['seiko'], 31:['omega montre'],
+    32:['rolex'], 33:['patek philippe'], 34:['audemars piguet'],
+    35:['carte pokemon'], 36:['pokemon psa'], 37:['carte nba'],
+    38:['super nintendo jeu'], 39:['kaws figurine'], 40:['grand cru vin'],
+    41:['macallan whisky'], 42:['manga rare'], 43:['livre edition limitee'],
+    44:['banksy print'], 45:['maillot retro'], 46:['velo carbone'],
+    47:['patagonia veste'], 48:['fauteuil vintage'], 49:['parfum rare'], 50:['bague or'],
+  };
 
-IMPORTANT: Ta réponse doit être UNIQUEMENT un tableau JSON brut, sans texte avant ou après, sans markdown, sans backticks, sans citations. Commence directement par [ et termine par ].
+  const allDeals = [];
+  const activeCatIds = [...S.activeCats].slice(0, 8);
+  const total = activeCatIds.length;
+  let scanned = 0;
 
-Format exact attendu:
-[
-  {"name":"Nom exact article","price":150,"url":"https://www.vinted.fr/items/XXXXX-nom","plat":"Vinted","cond":"Très bon état","seller":"username","cat":"Nike & Air Jordan"},
-  {"name":"Autre article","price":89,"url":"https://www.ebay.fr/itm/XXXXXXXXXX","plat":"eBay","cond":"Neuf","seller":"vendeur","cat":"Supreme"}
-]
+  async function fetchPlatform(platform, query, catId){
+    try {
+      const catName = CAT_QUERIES[catId]?.name || 'Mode';
+      let endpoint = '';
+      if(platform === 'vinted')     endpoint = `/api/vinted?q=${encodeURIComponent(query)}&per_page=10`;
+      else if(platform === 'ebay')  endpoint = `/api/ebay?q=${encodeURIComponent(query+' france')}`;
+      else if(platform === 'leboncoin') endpoint = `/api/leboncoin?q=${encodeURIComponent(query)}`;
+      else if(platform === 'vestiaire') endpoint = `/api/vestiaire?q=${encodeURIComponent(query)}`;
+      else return [];
 
-Trouve 5 à 8 annonces réelles actuellement en ligne avec les MEILLEURS prix. Assure-toi que les URLs sont complètes et valides.`;
+      const resp = await fetch(endpoint);
+      const ct = resp.headers.get('content-type') || '';
+      if(!ct.includes('json')) return [];
+      const data = await resp.json();
+      const items = data.items || [];
 
-  try {
-    S.botScanMsg = 'Recherche sur Vinted, eBay, Leboncoin...';
+      return items.slice(0, 3).map(function(item){
+        if(!item.price || item.price < 5) return null;
+        const {estimatedSell, roi} = scoreROI(item.price, catName);
+        const score = Math.min(9.9, Math.max(5.5,
+          (roi>100?9.2:roi>60?8.2:roi>30?7.2:6.2) + (Math.random()*.5-.25)
+        )).toFixed(1);
+        return {
+          name:   item.name,
+          cat:    catName,
+          plat:   item.plat || platform.charAt(0).toUpperCase()+platform.slice(1),
+          price:  item.price,
+          buy:    item.price,
+          sell:   estimatedSell,
+          roi:    roi,
+          score:  parseFloat(score),
+          url:    item.url,
+          cond:   item.cond || '',
+          seller: item.seller || '',
+        };
+      }).filter(Boolean);
+    } catch(e){ return []; }
+  }
+
+  for(const catId of activeCatIds){
+    scanned++;
+    const queries = VINTED_QUERIES[catId] || ['mode'];
+    const query = queries[0];
+    const platforms = CAT_PLATFORM[catId] || ['vinted'];
+
+    S.botScanMsg = `Scan ${scanned}/${total} — ${CAT_QUERIES[catId]?.name||''}...`;
     if(S.page==='bot'){ document.querySelector('.apmain').innerHTML = renderBot(); }
 
-    // Smart routing: try server proxy first (Vercel production),
-    // fall back to direct API call for preview/dev environments
-    const payload = {
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      tools: [{"type":"web_search_20250305","name":"web_search"}],
-      messages: [{role:'user', content: prompt}]
-    };
+    // Call 2 platforms in parallel
+    const results = await Promise.all(
+      platforms.slice(0,2).map(p => fetchPlatform(p, query, catId))
+    );
+    results.forEach(r => allDeals.push(...r));
+    await new Promise(r => setTimeout(r, 200));
+  }
 
-    let data;
-    try {
-      const proxyResp = await fetch('/api/snipe', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      const ct = proxyResp.headers.get('content-type') || '';
-      if(!ct.includes('application/json')){
-        throw new Error('proxy_not_available');
-      }
-      data = await proxyResp.json();
-    } catch(proxyErr) {
-      // Proxy not available (preview/dev) — try direct API with owner key if set
-      const ownerKey = S.apiKey || '';
-      if(!ownerKey){
-        throw new Error('Service temporairement indisponible. Réessayez dans quelques instants.');
-      }
-      const directResp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ownerKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify(payload)
-      });
-      data = await directResp.json();
-    }
+  // Deduplicate by URL, sort by ROI
+  S.liveDeals = allDeals
+    .filter((d,i,arr) => d.url && arr.findIndex(x=>x.url===d.url)===i)
+    .sort((a,b) => b.roi - a.roi)
+    .slice(0, 15);
 
-    if(data.error){
-      throw new Error('API: ' + (data.error.message || JSON.stringify(data.error)));
-    }
-
-    // Extract all text blocks from the response (after tool use)
-    let rawText = '';
-    if(data.content && Array.isArray(data.content)){
-      data.content.forEach(function(block){
-        if(block.type === 'text' && block.text) rawText += block.text;
-      });
-    }
-
-    // Clean up the text: remove citation brackets like [1], [Collectalert.eu], etc.
-    rawText = rawText
-      .replace(/\[\d+\]/g, '')           // [1], [2], [23]
-      .replace(/\[[A-Za-z][^\]]{0,50}\]/g, '') // [Collectalert.eu], [Source]
-      .replace(/```json/gi, '')
-      .replace(/```/g, '')
-      .trim();
-
-    // Try to extract JSON array
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if(!jsonMatch){
-      // Try to find individual JSON objects and wrap them
-      const objMatches = rawText.match(/\{[^{}]{30,}\}/g);
-      if(objMatches && objMatches.length > 0){
-        rawText = '[' + objMatches.join(',') + ']';
-      } else {
-        throw new Error('Aucune annonce trouvée dans la réponse. Réessayez.');
-      }
-    }
-
-    const jsonStr = jsonMatch ? jsonMatch[0] : rawText;
-    const deals = JSON.parse(jsonStr);
-
-    if(!Array.isArray(deals) || deals.length === 0){
-      throw new Error('Aucune annonce trouvée pour ces catégories.');
-    }
-
-    S.liveDeals = deals
-      .filter(function(d){ return d && d.name && (d.price || d.url); })
-      .map(function(d){
-        const price = parseFloat(d.price) || 0;
-        const {estimatedSell, roi} = scoreROI(price, d.cat || catNames[0]);
-        const rawScore = roi > 100 ? 9.5 : roi > 60 ? 8.5 : roi > 30 ? 7.5 : 6.5;
-        const arbitrScore = Math.min(9.9, Math.max(5.0, rawScore + (Math.random()*0.6 - 0.3))).toFixed(1);
-        return {
-          name:    d.name || 'Article sans nom',
-          cat:     d.cat  || catNames[0],
-          plat:    d.plat || detectPlat(d.url),
-          price:   price,
-          buy:     price,
-          sell:    estimatedSell,
-          roi:     roi,
-          score:   parseFloat(arbitrScore),
-          url:     d.url  || '',
-          cond:    d.cond || '',
-          seller:  d.seller || ''
-        };
-      })
-      .sort(function(a,b){ return b.roi - a.roi; });
-
-  } catch(err) {
-    console.error('Snipe error:', err);
-    // API indisponible → générer des deals démo réalistes basés sur les catégories sélectionnées
-    S.liveDeals = generateMockDeals([...S.activeCats]);
-    S.botScanError = '';
+  if(S.liveDeals.length < 4){
+    S.liveDeals = [...S.liveDeals, ...generateMockDeals(activeCatIds)].slice(0,10);
   }
 
   S.botScanning = false;
