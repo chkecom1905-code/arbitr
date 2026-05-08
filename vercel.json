@@ -1,6 +1,10 @@
 {
   "functions": {
-    "api/snipe.js": { "maxDuration": 30 },
-    "api/listing.js": { "maxDuration": 15 }
+    "api/snipe.js":      { "maxDuration": 30 },
+    "api/listing.js":    { "maxDuration": 15 },
+    "api/vinted.js":     { "maxDuration": 15 },
+    "api/ebay.js":       { "maxDuration": 15 },
+    "api/leboncoin.js":  { "maxDuration": 15 },
+    "api/vestiaire.js":  { "maxDuration": 15 }
   }
 }
