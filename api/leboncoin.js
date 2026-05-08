@@ -3,40 +3,36 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   const { q = 'sneakers' } = req.query;
   try {
-    const searchUrl = `https://www.leboncoin.fr/recherche?text=${encodeURIComponent(q)}&sort=time&owner_type=private`;
-    const r = await fetch(searchUrl, {
+    const url = `https://www.leboncoin.fr/recherche?text=${encodeURIComponent(q)}&sort=price&order=asc&owner_type=private`;
+    const r = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'fr-FR,fr;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Cache-Control': 'no-cache',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Site': 'none',
       }
     });
     const html = await r.text();
     const items = [];
 
-    // Try __NEXT_DATA__ first
-    const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (nextMatch) {
+    // Strategy 1: extract __NEXT_DATA__
+    const ndm = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (ndm) {
       try {
-        const nd = JSON.parse(nextMatch[1]);
+        const nd = JSON.parse(ndm[1]);
         const ads = nd?.props?.pageProps?.initialData?.data?.ads
                  || nd?.props?.pageProps?.ads
-                 || nd?.props?.pageProps?.searchData?.ads
-                 || [];
-        for (const ad of ads.slice(0, 20)) {
-          const priceVal = ad.price?.[0]
-            || parseInt((ad.attributes||[]).find(a=>a.key==='price')?.value||'0');
-          if (!priceVal || priceVal < 5) continue;
-          const id = ad.list_id;
-          if (!id) continue;
+                 || nd?.props?.pageProps?.searchData?.ads || [];
+        for (const ad of ads.slice(0,20)) {
+          const price = ad.price?.[0];
+          if (!price || price < 5) continue;
           items.push({
-            name:   ad.subject || ad.title || 'Annonce',
-            price:  priceVal,
-            url:    `https://www.leboncoin.fr/ad/${id}`,
+            name:   ad.subject || 'Annonce',
+            price,
+            url:    `https://www.leboncoin.fr/ad/${ad.list_id}`,
             plat:   'Leboncoin',
             cond:   'Occasion',
             seller: ad.owner?.name || '',
@@ -45,23 +41,28 @@ export default async function handler(req, res) {
       } catch(e2) {}
     }
 
-    // Fallback: regex on HTML
+    // Strategy 2: regex on embedded JSON
     if (items.length === 0) {
-      const idMatches = html.matchAll(/"list_id":(\d+),"first_publication_date[^"]*","subject":"([^"]+)","body":"[^"]*","price":\[(\d+)\]/g);
-      for (const m of idMatches) {
-        if (items.length >= 15) break;
-        items.push({
-          name:  m[2],
-          price: parseInt(m[3]),
-          url:   `https://www.leboncoin.fr/ad/${m[1]}`,
-          plat:  'Leboncoin',
-          cond:  'Occasion',
-          seller: '',
-        });
+      const matches = [...html.matchAll(/"list_id":(\d+).*?"subject":"([^"]+)".*?"price":\[(\d+)\]/g)];
+      for (const m of matches.slice(0,15)) {
+        items.push({ name:m[2], price:parseInt(m[3]), url:`https://www.leboncoin.fr/ad/${m[1]}`, plat:'Leboncoin', cond:'Occasion', seller:'' });
       }
     }
+
+    // Strategy 3: href patterns
+    if (items.length === 0) {
+      const hrefs = [...html.matchAll(/href="(\/ad\/\d+[^"]+)"/g)];
+      const seen = new Set();
+      for (const m of hrefs.slice(0,20)) {
+        const path = m[1].split('?')[0];
+        if (seen.has(path)) continue;
+        seen.add(path);
+        items.push({ name:'Annonce Leboncoin', price:0, url:`https://www.leboncoin.fr${path}`, plat:'Leboncoin', cond:'Occasion', seller:'' });
+      }
+    }
+
     res.status(200).json({ items, total: items.length });
   } catch(e) {
-    res.status(500).json({ items: [], error: e.message });
+    res.status(500).json({ items:[], error: e.message });
   }
 }
