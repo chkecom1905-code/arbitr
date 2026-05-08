@@ -1821,67 +1821,97 @@ function scoreROI(price, cat){
 
 
 function generateMockDeals(activeCatIds){
-  // Use real search page URLs — these always exist and show current listings
-  const pool = [
-    {name:'Air Jordan retro · recherche en cours',cat:'Nike & Air Jordan',price:150,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=air+jordan+retro&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:85,score:8.8},
-    {name:'Yeezy 350 occasion · recherche en cours',cat:'Adidas & Yeezy',price:190,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=yeezy+350&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:68,score:7.9},
-    {name:'Supreme Box Logo · recherche en cours',cat:'Supreme',price:180,plat:'eBay',
-     url:'https://www.ebay.fr/sch/i.html?_nkw=supreme+box+logo+hoodie&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:190,score:9.4},
-    {name:'New Balance 990 · recherche en cours',cat:'New Balance',price:130,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=new+balance+990&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:52,score:7.1},
-    {name:'Stussy Hoodie · recherche en cours',cat:'Stussy',price:85,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=stussy+hoodie&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:110,score:8.2},
-    {name:'Stone Island Veste · recherche en cours',cat:'Stone Island',price:200,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=stone+island+veste&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:60,score:7.5},
-    {name:'Carte Pokémon holo · recherche en cours',cat:'Cartes Pokemon',price:45,plat:'eBay',
-     url:'https://www.ebay.fr/sch/i.html?_nkw=carte+pokemon+holographique&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:180,score:9.0},
-    {name:'iPhone occasion · recherche en cours',cat:'Apple',price:550,plat:'Leboncoin',
-     url:'https://www.leboncoin.fr/recherche?text=iphone&category=2&sort=time',cond:'Voir annonces',seller:'Leboncoin Live',roi:20,score:6.3},
-    {name:'PS5 occasion · recherche en cours',cat:'PlayStation Xbox',price:350,plat:'Leboncoin',
-     url:'https://www.leboncoin.fr/recherche?text=ps5&category=18&sort=time',cond:'Voir annonces',seller:'Leboncoin Live',roi:15,score:6.0},
-    {name:'Louis Vuitton sac · recherche en cours',cat:'Louis Vuitton',price:600,plat:'Vestiaire',
-     url:'https://fr.vestiairecollective.com/search/?q=louis+vuitton+sac&order=created_at_desc',cond:'Voir annonces',seller:'Vestiaire Live',roi:35,score:7.2},
-    {name:'Casio G-Shock vintage · recherche en cours',cat:'Casio Swatch',price:40,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=casio+g-shock&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:95,score:8.3},
-    {name:'Maillot retro foot · recherche en cours',cat:'Maillots Rares',price:35,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=maillot+football+vintage&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:80,score:7.8},
-    {name:'Arcteryx Gore-Tex · recherche en cours',cat:'Arcteryx',price:220,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=arcteryx+gore+tex&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:45,score:7.0},
-    {name:'Palace Skateboarding · recherche en cours',cat:'Palace',price:160,plat:'eBay',
-     url:'https://www.ebay.fr/sch/i.html?_nkw=palace+skateboarding+hoodie&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:130,score:8.9},
-    {name:'Seiko montre vintage · recherche en cours',cat:'Seiko',price:180,plat:'eBay',
-     url:'https://www.ebay.fr/sch/i.html?_nkw=seiko+montre+vintage&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:42,score:6.8},
-    {name:'Patagonia Fleece · recherche en cours',cat:'Outdoor Patagonia',price:65,plat:'Vinted',
-     url:'https://www.vinted.fr/catalog?search_text=patagonia+fleece&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:62,score:7.3},
-  ];
+  // Last resort fallback — links go to filtered search pages (real, always valid)
+  const FALLBACK = {
+    0:  {n:'Air Jordan',    v:'air+jordan+retro',        e:'air+jordan+retro',       l:'',    vc:''},
+    1:  {n:'Yeezy',         v:'yeezy+350',               e:'adidas+yeezy+350',       l:'',    vc:''},
+    2:  {n:'New Balance',   v:'new+balance+990',         e:'new+balance+990',        l:'',    vc:''},
+    3:  {n:'Asics Saucony', v:'asics+gel',               e:'asics+gel+kayano',       l:'',    vc:''},
+    4:  {n:'Salomon',       v:'salomon+xt',              e:'salomon+xt-6',           l:'',    vc:''},
+    5:  {n:'Drops Collabs', v:'nike+collab',             e:'nike+limited+collab',    l:'',    vc:''},
+    6:  {n:'Sneakers Luxe', v:'balenciaga+sneakers',     e:'balenciaga+triple+s',    l:'',    vc:'balenciaga+sneakers'},
+    7:  {n:'Stüssy',        v:'stussy+hoodie',           e:'stussy+hoodie',          l:'',    vc:''},
+    8:  {n:'Supreme',       v:'supreme+sweat',           e:'supreme+box+logo',       l:'',    vc:''},
+    9:  {n:'Palace',        v:'palace+hoodie',           e:'palace+skateboarding',   l:'',    vc:''},
+    10: {n:'Corteiz',       v:'corteiz+hoodie',          e:'corteiz+crtz',           l:'',    vc:''},
+    11: {n:'Off-White',     v:'off+white',               e:'off+white+hoodie',       l:'',    vc:'off+white'},
+    12: {n:'Stone Island',  v:'stone+island+veste',      e:'stone+island',           l:'',    vc:'stone+island'},
+    13: {n:"Arc'teryx",     v:'arcteryx+veste',          e:'arcteryx+jacket',        l:'',    vc:'arcteryx'},
+    14: {n:'Carhartt WIP',  v:'carhartt+wip',            e:'carhartt+wip+veste',     l:'',    vc:''},
+    15: {n:'Louis Vuitton', v:'louis+vuitton+sac',       e:'',                       l:'',    vc:'louis+vuitton'},
+    16: {n:'Hermès',        v:'hermes+sac',              e:'',                       l:'',    vc:'hermes'},
+    17: {n:'Chanel',        v:'chanel+sac',              e:'',                       l:'',    vc:'chanel'},
+    18: {n:'Dior',          v:'dior+sac',                e:'',                       l:'',    vc:'dior'},
+    19: {n:'Gucci',         v:'gucci+sac',               e:'',                       l:'',    vc:'gucci'},
+    20: {n:'Prada Miu Miu', v:'prada+sac',               e:'prada+sac',              l:'',    vc:'prada'},
+    21: {n:'Bottega Veneta',v:'bottega+veneta',          e:'',                       l:'',    vc:'bottega+veneta'},
+    22: {n:'Céline',        v:'celine+sac',              e:'',                       l:'',    vc:'celine'},
+    23: {n:'Apple',         v:'iphone+occasion',         e:'iphone+occasion',        l:'iphone', vc:''},
+    24: {n:'PS Xbox',       v:'ps5+console',             e:'ps5+console',            l:'ps5',    vc:''},
+    25: {n:'Nintendo',      v:'nintendo+switch',         e:'nintendo+switch',        l:'switch', vc:''},
+    26: {n:'PC Gaming GPU', v:'rtx+gpu',                 e:'rtx+4070',               l:'rtx',    vc:''},
+    27: {n:'Drones',        v:'dji+drone',               e:'dji+mini',               l:'dji',    vc:''},
+    28: {n:'Audio Hi-Fi',   v:'casque+sony',             e:'sennheiser+casque',      l:'casque', vc:''},
+    29: {n:'Casio Swatch',  v:'casio+g-shock',           e:'casio+g-shock+vintage',  l:'',    vc:''},
+    30: {n:'Seiko',         v:'seiko+montre',            e:'seiko+presage',          l:'',    vc:''},
+    31: {n:'Omega',         v:'omega+montre',            e:'omega+seamaster',        l:'',    vc:'omega'},
+    32: {n:'Rolex',         v:'rolex',                   e:'rolex+submariner',       l:'',    vc:'rolex'},
+    33: {n:'Patek Philippe',v:'patek+philippe',          e:'patek+philippe',         l:'',    vc:'patek+philippe'},
+    34: {n:'AP Royal Oak',  v:'audemars+piguet',         e:'royal+oak+audemars',     l:'',    vc:'audemars+piguet'},
+    35: {n:'Pokémon',       v:'carte+pokemon',           e:'carte+pokemon+psa',      l:'',    vc:''},
+    36: {n:'PSA Gradées',   v:'pokemon+psa+10',          e:'pokemon+psa+gem+mint',   l:'',    vc:''},
+    37: {n:'Cartes NBA',    v:'carte+nba',               e:'prizm+nba+rookie',       l:'',    vc:''},
+    38: {n:'Jeux Rétro',    v:'super+nintendo+jeu',      e:'super+nintendo+jeu',     l:'super nintendo', vc:''},
+    39: {n:'Figurines',     v:'kaws+figurine',           e:'kaws+companion',         l:'',    vc:''},
+    40: {n:'Vins',          v:'grand+cru+vin',           e:'petrus+vin+rare',        l:'',    vc:''},
+    41: {n:'Whisky',        v:'macallan+whisky',         e:'whisky+rare+aged',       l:'',    vc:''},
+    42: {n:'Mangas',        v:'manga+rare',              e:'manga+edition+originale',l:'manga rare', vc:''},
+    43: {n:'Livres Rares',  v:'livre+edition+limitee',   e:'livre+rare+signe',       l:'',    vc:''},
+    44: {n:'Art Prints',    v:'banksy+print',            e:'banksy+art+print',       l:'',    vc:''},
+    45: {n:'Maillots',      v:'maillot+football+vintage',e:'maillot+vintage+retro',  l:'maillot vintage', vc:''},
+    46: {n:'Vélos',         v:'velo+route+carbone',      e:'trek+velo+carbone',      l:'velo carbone', vc:''},
+    47: {n:'Patagonia',     v:'patagonia+fleece',        e:'patagonia+jacket',       l:'patagonia', vc:''},
+    48: {n:'Mobilier',      v:'fauteuil+design+vintage', e:'eames+fauteuil',         l:'fauteuil vintage', vc:''},
+    49: {n:'Parfums',       v:'creed+aventus',           e:'creed+aventus+parfum',   l:'parfum rare', vc:''},
+    50: {n:'Bijoux Or',     v:'bague+or',                e:'bague+or+18k',           l:'bague or',  vc:''},
+  };
 
-  const catNames = activeCatIds.map(id => CAT_QUERIES[id]?.name).filter(Boolean);
-  let filtered = pool.filter(d => catNames.some(cn =>
-    d.cat.toLowerCase().includes(cn.toLowerCase().split(' ')[0].toLowerCase())
-  ));
-  if(filtered.length < 4) filtered = pool;
-
-  return filtered
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 8)
-    .map(function(d){
-      return {
-        name:   '🔍 ' + d.name,
-        cat:    d.cat,
-        plat:   d.plat,
-        price:  d.price,
-        buy:    d.price,
-        sell:   Math.round(d.price * (1 + d.roi/100)),
-        roi:    d.roi,
-        score:  d.score,
-        url:    d.url,
-        cond:   d.cond,
-        seller: d.seller,
-      };
-    })
-    .sort((a,b) => b.roi - a.roi);
+  const deals = [];
+  activeCatIds.slice(0,8).forEach(function(id){
+    const f = FALLBACK[id];
+    if(!f) return;
+    const catName = CAT_QUERIES[id]?.name || f.n;
+    // Pick best platform for this category
+    let url, plat;
+    if(f.vc) {
+      url = `https://fr.vestiairecollective.com/search/?q=${f.vc}&order=created_at_desc`;
+      plat = 'Vestiaire';
+    } else if(f.l) {
+      url = `https://www.leboncoin.fr/recherche?text=${encodeURIComponent(f.l)}&sort=time`;
+      plat = 'Leboncoin';
+    } else if(f.e) {
+      url = `https://www.ebay.fr/sch/i.html?_nkw=${f.e}&_sop=10`;
+      plat = 'eBay';
+    } else {
+      url = `https://www.vinted.fr/catalog?search_text=${f.v}&order=newest_first`;
+      plat = 'Vinted';
+    }
+    const roi = Math.floor(Math.random()*80)+30;
+    deals.push({
+      name:   '🔍 Scan en cours — Meilleures offres ' + catName,
+      cat:    catName,
+      plat,
+      price:  0,
+      buy:    0,
+      sell:   0,
+      roi,
+      score:  (Math.random()*2+7).toFixed(1),
+      url,
+      cond:   'Voir les annonces →',
+      seller: 'Cliquez pour voir les offres en temps réel',
+    });
+  });
+  return deals;
 }
 
 
