@@ -1821,48 +1821,70 @@ function scoreROI(price, cat){
 
 
 function generateMockDeals(activeCatIds){
+  // Use real search page URLs — these always exist and show current listings
   const pool = [
-    {name:'Air Jordan 4 Retro Bred',cat:'Nike & Air Jordan',price:185,plat:'Vinted',url:'https://www.vinted.fr/items/4821903456-air-jordan-4-bred-taille-43',cond:'Très bon état',seller:'sneaker_drop_fr ★4.9',roi:92,score:9.1},
-    {name:'Adidas Yeezy 350 V2 Zebra',cat:'Adidas & Yeezy',price:210,plat:'eBay',url:'https://www.ebay.fr/itm/Adidas-Yeezy-Boost-350-V2-Zebra-42-5/156782345012',cond:'Neuf sans étiquette',seller:'yeezy_paris ★5.0',roi:71,score:7.8},
-    {name:'New Balance 990v6 Made in USA',cat:'New Balance',price:145,plat:'Vinted',url:'https://www.vinted.fr/items/5102987341-new-balance-990v6-42',cond:'Très bon état',seller:'nb_collector ★4.8',roi:55,score:7.2},
-    {name:'Supreme Box Logo Hoodie FW23',cat:'Supreme',price:190,plat:'eBay',url:'https://www.ebay.fr/itm/Supreme-Box-Logo-Hooded-Sweatshirt-FW23-L/156234891023',cond:'Neuf avec étiquette',seller:'supreme_eu ★5.0',roi:184,score:9.5},
-    {name:'Stussy 8 Ball Fleece Jacket',cat:'Stussy',price:95,plat:'Vinted',url:'https://www.vinted.fr/items/4921034567-stussy-8-ball-fleece-xl',cond:'Bon état',seller:'streetwear_vault ★4.7',roi:120,score:8.3},
-    {name:'Nike SB Dunk Low Travis Scott',cat:'Drops & Collabs',price:380,plat:'StockX',url:'https://stockx.com/nike-sb-dunk-low-travis-scott',cond:'DS',seller:'Stockx Verified',roi:68,score:8.8},
-    {name:'Salomon XT-6 Advanced',cat:'Salomon & Hoka',price:89,plat:'Vinted',url:'https://www.vinted.fr/items/5203456789-salomon-xt6-advanced-43',cond:'Très bon état',seller:'trail_resell ★4.9',roi:45,score:6.9},
-    {name:'Stone Island Ghost Piece AW23',cat:'Stone Island',price:220,plat:'Vinted',url:'https://www.vinted.fr/items/4712893456-stone-island-ghost-piece-m',cond:'Très bon état',seller:'si_collector ★4.8',roi:63,score:7.6},
-    {name:'Carhartt WIP Detroit Jacket',cat:'Carhartt WIP',price:68,plat:'Vinted',url:'https://www.vinted.fr/items/5034512890-carhartt-wip-detroit-jacket-l',cond:'Bon état',seller:'workwear_fr ★4.7',roi:80,score:7.4},
-    {name:'Palace Tri-Ferg Hoodie FW24',cat:'Palace',price:178,plat:'eBay',url:'https://www.ebay.fr/itm/Palace-Tri-Ferg-Hooded-Sweat-FW24-M/156891234078',cond:'Neuf avec étiquette',seller:'ldn_resell ★4.9',roi:140,score:9.0},
-    {name:'iPhone 14 Pro 128GB Noir',cat:'Apple',price:610,plat:'Leboncoin',url:'https://www.leboncoin.fr/telephone/2387456123.htm',cond:'Très bon état',seller:'tech_paris ★4.8',roi:22,score:6.5},
-    {name:'PS5 Standard Edition',cat:'PlayStation Xbox',price:380,plat:'Leboncoin',url:'https://www.leboncoin.fr/console-et-jeux-video/2456789012.htm',cond:'Très bon état',seller:'games_shop_fr ★4.9',roi:18,score:6.2},
-    {name:'Casio G-Shock DW-5600 Vintage',cat:'Casio Swatch',price:42,plat:'Vinted',url:'https://www.vinted.fr/items/4823456190-casio-g-shock-dw5600-vintage',cond:'Bon état',seller:'watch_collector ★4.9',roi:110,score:8.5},
-    {name:'Seiko Presage SARX055 Automatique',cat:'Seiko',price:280,plat:'eBay',url:'https://www.ebay.fr/itm/Seiko-Presage-SARX055-Automatic-Japan/156234567890',cond:'Très bon état',seller:'watch_japan ★5.0',roi:44,score:7.0},
-    {name:'Pokémon Dracaufeu Base Set Holo',cat:'Cartes Pokemon',price:320,plat:'eBay',url:'https://www.ebay.fr/itm/Pokemon-Charizard-Base-Set-Holographic-FR/156478901234',cond:'EX',seller:'pokemon_collector ★5.0',roi:195,score:9.3},
-    {name:'Maillot PSG 2012-13 Ibrahimovic',cat:'Maillots Rares',price:45,plat:'Vinted',url:'https://www.vinted.fr/items/4934561230-maillot-psg-ibrahimovic-2013-l',cond:'Bon état',seller:'vintage_sport ★4.8',roi:87,score:7.9},
-    {name:'Patagonia Fleece Synchilla Snap',cat:'Outdoor Patagonia',price:72,plat:'Vinted',url:'https://www.vinted.fr/items/5123456780-patagonia-synchilla-snap-m',cond:'Très bon état',seller:'outdoor_resell ★4.9',roi:65,score:7.3},
-    {name:'Saucony Shadow 6000 White/Black',cat:'Asics & Saucony',price:78,plat:'Vinted',url:'https://www.vinted.fr/items/5234567891-saucony-shadow-6000-42',cond:'Très bon état',seller:'snkr_vault ★4.7',roi:48,score:6.8},
+    {name:'Air Jordan retro · recherche en cours',cat:'Nike & Air Jordan',price:150,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=air+jordan+retro&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:85,score:8.8},
+    {name:'Yeezy 350 occasion · recherche en cours',cat:'Adidas & Yeezy',price:190,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=yeezy+350&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:68,score:7.9},
+    {name:'Supreme Box Logo · recherche en cours',cat:'Supreme',price:180,plat:'eBay',
+     url:'https://www.ebay.fr/sch/i.html?_nkw=supreme+box+logo+hoodie&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:190,score:9.4},
+    {name:'New Balance 990 · recherche en cours',cat:'New Balance',price:130,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=new+balance+990&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:52,score:7.1},
+    {name:'Stussy Hoodie · recherche en cours',cat:'Stussy',price:85,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=stussy+hoodie&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:110,score:8.2},
+    {name:'Stone Island Veste · recherche en cours',cat:'Stone Island',price:200,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=stone+island+veste&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:60,score:7.5},
+    {name:'Carte Pokémon holo · recherche en cours',cat:'Cartes Pokemon',price:45,plat:'eBay',
+     url:'https://www.ebay.fr/sch/i.html?_nkw=carte+pokemon+holographique&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:180,score:9.0},
+    {name:'iPhone occasion · recherche en cours',cat:'Apple',price:550,plat:'Leboncoin',
+     url:'https://www.leboncoin.fr/recherche?text=iphone&category=2&sort=time',cond:'Voir annonces',seller:'Leboncoin Live',roi:20,score:6.3},
+    {name:'PS5 occasion · recherche en cours',cat:'PlayStation Xbox',price:350,plat:'Leboncoin',
+     url:'https://www.leboncoin.fr/recherche?text=ps5&category=18&sort=time',cond:'Voir annonces',seller:'Leboncoin Live',roi:15,score:6.0},
+    {name:'Louis Vuitton sac · recherche en cours',cat:'Louis Vuitton',price:600,plat:'Vestiaire',
+     url:'https://fr.vestiairecollective.com/search/?q=louis+vuitton+sac&order=created_at_desc',cond:'Voir annonces',seller:'Vestiaire Live',roi:35,score:7.2},
+    {name:'Casio G-Shock vintage · recherche en cours',cat:'Casio Swatch',price:40,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=casio+g-shock&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:95,score:8.3},
+    {name:'Maillot retro foot · recherche en cours',cat:'Maillots Rares',price:35,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=maillot+football+vintage&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:80,score:7.8},
+    {name:'Arcteryx Gore-Tex · recherche en cours',cat:'Arcteryx',price:220,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=arcteryx+gore+tex&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:45,score:7.0},
+    {name:'Palace Skateboarding · recherche en cours',cat:'Palace',price:160,plat:'eBay',
+     url:'https://www.ebay.fr/sch/i.html?_nkw=palace+skateboarding+hoodie&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:130,score:8.9},
+    {name:'Seiko montre vintage · recherche en cours',cat:'Seiko',price:180,plat:'eBay',
+     url:'https://www.ebay.fr/sch/i.html?_nkw=seiko+montre+vintage&_sop=10',cond:'Voir annonces',seller:'eBay Live',roi:42,score:6.8},
+    {name:'Patagonia Fleece · recherche en cours',cat:'Outdoor Patagonia',price:65,plat:'Vinted',
+     url:'https://www.vinted.fr/catalog?search_text=patagonia+fleece&order=newest_first',cond:'Voir annonces',seller:'Vinted Live',roi:62,score:7.3},
   ];
-  // Filter by active categories if possible
+
   const catNames = activeCatIds.map(id => CAT_QUERIES[id]?.name).filter(Boolean);
-  let filtered = pool.filter(d => catNames.some(cn => d.cat.toLowerCase().includes(cn.toLowerCase().split(' ')[0])));
-  if(filtered.length < 4) filtered = pool; // fallback to all if not enough matches
-  // Shuffle and take 6
-  filtered = filtered.sort(() => Math.random() - 0.5).slice(0, 6);
-  return filtered.map(function(d){
-    return {
-      name:   d.name,
-      cat:    d.cat,
-      plat:   d.plat,
-      price:  d.price,
-      buy:    d.price,
-      sell:   Math.round(d.price * (1 + d.roi/100)),
-      roi:    d.roi,
-      score:  d.score,
-      url:    d.url,
-      cond:   d.cond,
-      seller: d.seller
-    };
-  }).sort((a,b) => b.roi - a.roi);
+  let filtered = pool.filter(d => catNames.some(cn =>
+    d.cat.toLowerCase().includes(cn.toLowerCase().split(' ')[0].toLowerCase())
+  ));
+  if(filtered.length < 4) filtered = pool;
+
+  return filtered
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 8)
+    .map(function(d){
+      return {
+        name:   '🔍 ' + d.name,
+        cat:    d.cat,
+        plat:   d.plat,
+        price:  d.price,
+        buy:    d.price,
+        sell:   Math.round(d.price * (1 + d.roi/100)),
+        roi:    d.roi,
+        score:  d.score,
+        url:    d.url,
+        cond:   d.cond,
+        seller: d.seller,
+      };
+    })
+    .sort((a,b) => b.roi - a.roi);
 }
+
+
 async function snipeNow(){
   if(!S.botOn){ alert('Activez le bot d\'abord.'); return; }
   if(S.activeCats.size === 0){ alert('Sélectionnez au moins une catégorie.'); return; }
